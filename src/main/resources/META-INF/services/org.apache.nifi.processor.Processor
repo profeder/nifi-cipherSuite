@@ -1,2 +1,3 @@
-org.profeder.chiperSuite.processors.KeyGeneratorProcessor
-org.profeder.chiperSuite.processors.HashProcessor
+org.profeder.cipherSuite.processors.KeyGeneratorProcessor
+org.profeder.cipherSuite.processors.HashProcessor
+org.profeder.cipherSuite.processors.SimmetricChiperProcessor

@@ -1,7 +1,7 @@
 /**
  * 
  */
-package org.profeder.chiperSuite.processors;
+package org.profeder.cipherSuite.processors;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;

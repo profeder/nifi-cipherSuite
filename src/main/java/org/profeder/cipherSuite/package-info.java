@@ -5,4 +5,4 @@
  * @author fprofeti
  *
  */
-package org.profeder.chiperSuite;
+package org.profeder.cipherSuite;

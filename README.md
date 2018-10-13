@@ -1,2 +1,2 @@
-# nifi-chiperSuite
-A simple collection of chiper tool for Apache nifi
+# nifi-cipherSuite
+A simple collection of cipher tool for Apache nifi

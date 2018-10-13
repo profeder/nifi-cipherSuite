@@ -7,7 +7,7 @@ import org.apache.commons.io.IOUtils;
 import org.apache.nifi.util.MockFlowFile;
 import org.apache.nifi.util.TestRunner;
 import org.apache.nifi.util.TestRunners;
-import org.profeder.chiperSuite.processors.KeyGeneratorProcessor;
+import org.profeder.cipherSuite.processors.KeyGeneratorProcessor;
 
 
 public class KeyGeneratorProcessorTest {
