@@ -6,9 +6,11 @@ package org.profeder.chiperSuite.processors;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.nifi.annotation.behavior.SideEffectFree;
 import org.apache.nifi.annotation.documentation.CapabilityDescription;
@@ -36,15 +38,22 @@ public class KeyGeneratorProcessor extends AbstractProcessor{
 	private static final int startChar = 33;	// !
 	private static final int endChar = 126;		// ~
 	
-	private static Set <String> availableLength;
+	private static Set <String> availableLength = new HashSet<String>(Arrays.asList("128", "256", "512"));
 	
 	private List <PropertyDescriptor> properties;
 	private Set <Relationship> relationship;
 	
-	public static final Relationship SUCCESS = new Relationship.Builder()
-	        .name("SUCCESS")
+	public static final Relationship KEYOUT = new Relationship.Builder()
+	        .name("KEYOUT")
 	        .description("Succes relationship")
 	        .build();
+	
+	public static final PropertyDescriptor kLen = new PropertyDescriptor.Builder().name("Key lenght")
+			.description("Specify the output key length")
+			.defaultValue("128")
+			.allowableValues(availableLength)
+			//.addValidator(StandardValidators.NON_EMPTY_VALIDATOR)
+			.build();
 	
 	protected void init(ProcessorInitializationContext context) {
 		super.init(context);
@@ -54,15 +63,13 @@ public class KeyGeneratorProcessor extends AbstractProcessor{
 		}
 		properties = new ArrayList<PropertyDescriptor>();
 		relationship = new HashSet<Relationship>();
-		relationship.add(SUCCESS);
+		relationship.add(KEYOUT);
 		
-		availableLength = new HashSet<String>();
+		/*availableLength = new HashSet<String>();
 		
 		availableLength.add("128");
-		availableLength.add("256");
+		availableLength.add("256");*/
 		
-		PropertyDescriptor kLen = new PropertyDescriptor.Builder().name("key length")
-				.description("Specify the output key length").dynamic(true).allowableValues(availableLength).build();
 		properties.add(kLen);
 	}
 	
@@ -74,8 +81,9 @@ public class KeyGeneratorProcessor extends AbstractProcessor{
 		return properties;
 	}
 	
-	private String calcolateKey() {
-		int len = 128;
+	private String calcolateKey(int len) {
+		
+		len /= 8;
 		StringBuilder sb = new StringBuilder();
 		for(int i = 0; i < len; i++) {
 			sb.append(alpha[(int)(Math.random()*alpha.length)]);
@@ -84,19 +92,25 @@ public class KeyGeneratorProcessor extends AbstractProcessor{
 	}
 	
 	@Override
-	public void onTrigger(ProcessContext arg0, ProcessSession session) throws ProcessException {
+	public void onTrigger(final ProcessContext context,final ProcessSession session) throws ProcessException {
+		final AtomicReference<String> key = new AtomicReference<String>();
 		FlowFile ff = session.create();
-		final String key = calcolateKey();
-		session.putAttribute(ff, "key", key);
+		
+		String len = context.getProperty(kLen).getValue();
+		if(len == null)
+			throw new ProcessException("Invalid key length");
+		key.set(calcolateKey(Integer.parseInt(len)));
+		//key.set(calcolateKey(128));
+		//session.putAttribute(ff, "key", key.get());
 		ff = session.write(ff, new OutputStreamCallback() {
 			
 			public void process(OutputStream out) throws IOException {
-				out.write(key.getBytes());
+				out.write(key.get().getBytes());
 				
 			}
 		});
 		
-		session.transfer(ff, SUCCESS);
+		session.transfer(ff, KEYOUT);
 	}
 	
 	
