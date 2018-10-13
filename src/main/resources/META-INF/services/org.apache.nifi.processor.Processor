@@ -1,1 +1,2 @@
 org.profeder.chiperSuite.processors.KeyGeneratorProcessor
+org.profeder.chiperSuite.processors.HashProcessor
