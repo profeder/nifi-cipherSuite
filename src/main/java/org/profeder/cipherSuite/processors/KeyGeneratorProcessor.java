@@ -5,12 +5,19 @@ package org.profeder.cipherSuite.processors;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.security.NoSuchAlgorithmException;
+import java.security.Provider;
+import java.security.Security;
+import java.security.Provider.Service;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
+
+import javax.crypto.KeyGenerator;
+import javax.crypto.SecretKey;
 
 import org.apache.nifi.annotation.behavior.SideEffectFree;
 import org.apache.nifi.annotation.documentation.CapabilityDescription;
@@ -33,12 +40,6 @@ import org.apache.nifi.processor.io.OutputStreamCallback;
 @Tags({"Key generator"})
 @CapabilityDescription ("Generate random key for simmetric chiper")
 public class KeyGeneratorProcessor extends AbstractProcessor{
-
-	private static char [] alpha;
-	private static final int startChar = 33;	// !
-	private static final int endChar = 126;		// ~
-	
-	private static Set <String> availableLength = new HashSet<String>(Arrays.asList("128", "256", "512"));
 	
 	private List <PropertyDescriptor> properties;
 	private Set <Relationship> relationship;
@@ -48,24 +49,34 @@ public class KeyGeneratorProcessor extends AbstractProcessor{
 	        .description("Succes relationship")
 	        .build();
 	
-	public static final PropertyDescriptor kLen = new PropertyDescriptor.Builder().name("Key lenght")
-			.description("Specify the output key length")
-			.defaultValue("128")
-			.allowableValues(availableLength)
-			//.addValidator(StandardValidators.NON_EMPTY_VALIDATOR)
-			.build();
+	private static PropertyDescriptor CIPHER;
+	private KeyGenerator gen;
+	
+	public static void initAlgos() {
+		if(CIPHER == null) {
+			Set <String> algos = new HashSet<String>();
+			Provider[] providers = Security.getProviders();
+			for(Provider provider : providers) {
+				Set <Service> services = provider.getServices();
+				for(Service service : services) {
+					if(service.getType().equalsIgnoreCase(KeyGenerator.class.getSimpleName())) {
+						algos.add(service.getAlgorithm());
+					}
+				}
+			}
+			CIPHER = new PropertyDescriptor.Builder().name("Key generator").allowableValues(algos).build();
+		}
+	}
 	
 	protected void init(ProcessorInitializationContext context) {
 		super.init(context);
-		alpha = new char[endChar - startChar];
-		for(int i = 0; i < endChar - startChar; i++) {
-			alpha[i] = (char)(i + startChar);
-		}
+
+		initAlgos();
 		properties = new ArrayList<PropertyDescriptor>();
 		relationship = new HashSet<Relationship>();
 		relationship.add(KEYOUT);
 		
-		properties.add(kLen);
+		properties.add(CIPHER);
 	}
 	
 	public Set<Relationship> getRelationships(){
@@ -76,30 +87,26 @@ public class KeyGeneratorProcessor extends AbstractProcessor{
 		return properties;
 	}
 	
-	private String calcolateKey(int len) {
-		
-		len /= 8;
-		StringBuilder sb = new StringBuilder();
-		for(int i = 0; i < len; i++) {
-			sb.append(alpha[(int)(Math.random()*alpha.length)]);
-		}
-		return sb.toString();
-	}
-	
 	@Override
 	public void onTrigger(ProcessContext context, ProcessSession session) throws ProcessException {
-		final AtomicReference<String> key = new AtomicReference<String>();
+		final AtomicReference<byte []> key = new AtomicReference<byte []>();
 		FlowFile ff = session.create();
+		try {
+			if(gen == null)
+				gen = KeyGenerator.getInstance(context.getProperty(CIPHER).getValue());
+		} catch (NoSuchAlgorithmException e) {
+			throw new ProcessException(e);
+		}
 		
-		String len = context.getProperty(kLen).getValue();
-		if(len == null)
-			throw new ProcessException("Invalid key length");
-		key.set(calcolateKey(Integer.parseInt(len)));
+		SecretKey k = gen.generateKey();
+		key.set(k.getEncoded());
+		session.putAttribute(ff, "isKey", "");
+		
 		ff = session.write(ff, new OutputStreamCallback() {
 			
+			@Override
 			public void process(OutputStream out) throws IOException {
-				out.write(key.get().getBytes());
-				
+				out.write(key.get());
 			}
 		});
 		

@@ -7,21 +7,25 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.security.MessageDigest;
+import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import java.security.Provider;
-import java.security.Provider.Service;
 import java.security.Security;
+import java.security.Provider.Service;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 
+import javax.crypto.BadPaddingException;
+import javax.crypto.Cipher;
+import javax.crypto.IllegalBlockSizeException;
+import javax.crypto.NoSuchPaddingException;
+import javax.crypto.spec.SecretKeySpec;
+
 import org.apache.nifi.annotation.behavior.EventDriven;
-import org.apache.nifi.annotation.behavior.SideEffectFree;
-import org.apache.nifi.annotation.documentation.CapabilityDescription;
-import org.apache.nifi.annotation.documentation.Tags;
 import org.apache.nifi.components.PropertyDescriptor;
 import org.apache.nifi.flowfile.FlowFile;
 import org.apache.nifi.processor.AbstractProcessor;
@@ -37,22 +41,25 @@ import org.apache.nifi.processor.io.OutputStreamCallback;
  * @author fprofeti
  *
  */
-@SideEffectFree
-@Tags({"Hash"})
-@CapabilityDescription("Perform hashing algorith on input data")
 @EventDriven
-public class HashProcessor extends AbstractProcessor{
+public class SymmetricCipherProcessor extends AbstractProcessor {
 	
 	private List <PropertyDescriptor> properties;
 	private Set <Relationship> relationship;
 	
 	private static PropertyDescriptor ALGORITHM; 
-	public static final Relationship HASH = new Relationship.Builder()
-	        .name("HASH")
-	        .description("Succes relationship")
+	private static final PropertyDescriptor OPERATION = new PropertyDescriptor.Builder().name("Mode")
+			.description("Specify the operation to be perform")
+			.allowableValues(new HashSet<String>(Arrays.asList("Encript", "Decript")))
+			.build();
+	
+	public static final Relationship OUTPUT = new Relationship.Builder()
+	        .name("OUTPUT")
+	        .description("Cipher output")
 	        .build();
 	
-	private MessageDigest algo;
+	private Cipher algo;
+	private SecretKeySpec key;
 	
 	public static void initAlgos() {
 		if(ALGORITHM == null) {
@@ -61,12 +68,12 @@ public class HashProcessor extends AbstractProcessor{
 			for(Provider provider : providers) {
 				Set <Service> services = provider.getServices();
 				for(Service service : services) {
-					if(service.getType().equalsIgnoreCase(MessageDigest.class.getSimpleName())) {
+					if(service.getType().equalsIgnoreCase(Cipher.class.getSimpleName())) {
 						algos.add(service.getAlgorithm());
 					}
 				}
 			}
-			ALGORITHM = new PropertyDescriptor.Builder().name("Message digest algorithm").allowableValues(algos).build();
+			ALGORITHM = new PropertyDescriptor.Builder().name("Cipher algorithms").allowableValues(algos).build();
 		}
 	}
 	
@@ -77,9 +84,10 @@ public class HashProcessor extends AbstractProcessor{
 		properties = new ArrayList<PropertyDescriptor>();
 		initAlgos();
 		properties.add(ALGORITHM);
+		properties.add(OPERATION);
 		
 		relationship = new HashSet<Relationship>();
-		relationship.add(HASH);
+		relationship.add(OUTPUT);
 	}
 	
 	public Set<Relationship> getRelationships(){
@@ -89,29 +97,21 @@ public class HashProcessor extends AbstractProcessor{
 	public List<PropertyDescriptor> getSupportedPropertyDescriptors(){
 		return properties;
 	}
-	
-	private byte [] performHash (byte [] input){
-		algo.reset();
-		algo.update(input);
-		return algo.digest();
-	}
 
+	/* (non-Javadoc)
+	 * @see org.apache.nifi.processor.AbstractProcessor#onTrigger(org.apache.nifi.processor.ProcessContext, org.apache.nifi.processor.ProcessSession)
+	 */
 	@Override
 	public void onTrigger(ProcessContext context, ProcessSession session) throws ProcessException {
-		final AtomicReference<byte []> hash = new AtomicReference<byte []>();
+		final AtomicReference<byte []> msg = new AtomicReference<byte []>();
 		FlowFile ff = session.get();
+		String k;
+		int mode;
 		if(ff == null)
 			return;
-		
-		if(algo == null) {
-			try {
-				algo = MessageDigest.getInstance(context.getProperty(ALGORITHM).getValue());
-			} catch (NoSuchAlgorithmException e) {
-				throw new ProcessException(e);
-			}
-		}
 		session.read(ff, new InputStreamCallback() {
 			
+			@Override
 			public void process(InputStream in) throws IOException {
 				byte [] buffer = new byte[1024];
 				ByteArrayOutputStream bais = new ByteArrayOutputStream();
@@ -119,21 +119,50 @@ public class HashProcessor extends AbstractProcessor{
 				while((len = in.read(buffer)) > 1) {
 					bais.write(buffer, 0, len);
 				}
-				hash.set(bais.toByteArray());
+				msg.set(bais.toByteArray());
 			}
 		});
+		if(ff.getAttribute("isKey") != null) {
+			key = new SecretKeySpec(msg.get(), context.getProperty(ALGORITHM).getValue());
+			session.remove(ff);
+			return;
+		}
+		try {
+			if(algo == null)
+				algo = Cipher.getInstance(context.getProperty(ALGORITHM).getValue());
+		} catch (NoSuchAlgorithmException | NoSuchPaddingException e) {
+			throw new ProcessException(e);
+		}
 		
-		byte [] tmp = performHash(hash.get());
-		hash.set(tmp);
-		session.putAttribute(ff, "algorithm", context.getProperty(ALGORITHM).getValue());
+		if("Encript".equals(context.getProperty(OPERATION).getValue())) 
+			mode = Cipher.ENCRYPT_MODE;
+		else
+			if("Decript".equals(context.getProperty(OPERATION).getValue()))
+				mode = Cipher.DECRYPT_MODE;
+			else
+				throw new ProcessException("Mode not defined");
+		
+		try {
+			algo.init(mode, key);
+			algo.update(msg.get());
+			msg.set(algo.doFinal());
+		} catch (InvalidKeyException e) {
+			throw new ProcessException(e);
+		} catch (IllegalBlockSizeException e) {
+			throw new ProcessException(e);
+		} catch (BadPaddingException e) {
+			throw new ProcessException(e);
+		}
+		
 		ff = session.write(ff, new OutputStreamCallback() {
 			
+			@Override
 			public void process(OutputStream out) throws IOException {
-				out.write(hash.get());
+				out.write(msg.get());
 			}
 		});
-		
-		session.transfer(ff, HASH);
+
+		session.transfer(ff, OUTPUT);
 	}
 
 }
