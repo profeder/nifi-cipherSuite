@@ -10,7 +10,6 @@ import java.security.Provider;
 import java.security.Security;
 import java.security.Provider.Service;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -46,7 +45,7 @@ public class KeyGeneratorProcessor extends AbstractProcessor{
 	
 	public static final Relationship KEYOUT = new Relationship.Builder()
 	        .name("KEYOUT")
-	        .description("Succes relationship")
+	        .description("Generated key")
 	        .build();
 	
 	private static PropertyDescriptor CIPHER;

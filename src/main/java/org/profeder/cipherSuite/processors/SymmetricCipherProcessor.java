@@ -26,6 +26,8 @@ import javax.crypto.NoSuchPaddingException;
 import javax.crypto.spec.SecretKeySpec;
 
 import org.apache.nifi.annotation.behavior.EventDriven;
+import org.apache.nifi.annotation.documentation.CapabilityDescription;
+import org.apache.nifi.annotation.documentation.Tags;
 import org.apache.nifi.components.PropertyDescriptor;
 import org.apache.nifi.flowfile.FlowFile;
 import org.apache.nifi.processor.AbstractProcessor;
@@ -41,6 +43,9 @@ import org.apache.nifi.processor.io.OutputStreamCallback;
  * @author fprofeti
  *
  */
+
+@Tags({"cipher"})
+@CapabilityDescription("Perform encript/decript operation on flow")
 @EventDriven
 public class SymmetricCipherProcessor extends AbstractProcessor {
 	
@@ -105,7 +110,6 @@ public class SymmetricCipherProcessor extends AbstractProcessor {
 	public void onTrigger(ProcessContext context, ProcessSession session) throws ProcessException {
 		final AtomicReference<byte []> msg = new AtomicReference<byte []>();
 		FlowFile ff = session.get();
-		String k;
 		int mode;
 		if(ff == null)
 			return;

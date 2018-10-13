@@ -49,7 +49,7 @@ public class HashProcessor extends AbstractProcessor{
 	private static PropertyDescriptor ALGORITHM; 
 	public static final Relationship HASH = new Relationship.Builder()
 	        .name("HASH")
-	        .description("Succes relationship")
+	        .description("Hashed output")
 	        .build();
 	
 	private MessageDigest algo;
