@@ -65,11 +65,6 @@ public class KeyGeneratorProcessor extends AbstractProcessor{
 		relationship = new HashSet<Relationship>();
 		relationship.add(KEYOUT);
 		
-		/*availableLength = new HashSet<String>();
-		
-		availableLength.add("128");
-		availableLength.add("256");*/
-		
 		properties.add(kLen);
 	}
 	
@@ -100,8 +95,6 @@ public class KeyGeneratorProcessor extends AbstractProcessor{
 		if(len == null)
 			throw new ProcessException("Invalid key length");
 		key.set(calcolateKey(Integer.parseInt(len)));
-		//key.set(calcolateKey(128));
-		//session.putAttribute(ff, "key", key.get());
 		ff = session.write(ff, new OutputStreamCallback() {
 			
 			public void process(OutputStream out) throws IOException {
