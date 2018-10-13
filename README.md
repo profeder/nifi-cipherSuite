@@ -1,2 +1,2 @@
 # nifi-chiperSuite
-A simple collection of chiper for nifi
+A simple collection of chiper tool for Apache nifi
